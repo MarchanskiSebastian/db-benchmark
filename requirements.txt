@@ -1,0 +1,7 @@
+pandas
+matplotlib
+faker
+psycopg2-binary
+mysql-connector-python
+pymongo
+neo4j
