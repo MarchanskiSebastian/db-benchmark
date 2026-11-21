@@ -163,3 +163,100 @@ class MongoWriter:
     def close(self):
         for f in self.files.values():
             f.close()
+
+
+def neo4j_type(values):
+    types = {type(v) for v in values}
+    if types == {bool}:
+        return ":boolean"
+    if types <= {int}:
+        return ":int"
+    if types <= {int, float}:
+        return ":float"
+    return ""
+
+
+class Neo4jWriter:
+    """CSV in neo4j-admin import format: data files without headers plus *_header.csv files.
+
+    Products get their category as an extra label (e.g. Product;CPU) and their specs as
+    typed properties. COMPATIBLE_WITH links CPUs and RAM to motherboards with a matching
+    socket or memory type.
+    """
+
+    NODES = {
+        "customers": ["customerId:ID(Customer)", "first_name", "last_name", "email", "phone", "created_at:datetime"],
+        "orders": ["orderId:ID(Order)", "status", "total_amount:float", "created_at:datetime", "payment_method",
+                   "payment_status", "paid_at:datetime", "carrier", "shipped_at:datetime", "delivered_at:datetime"],
+        "categories": ["categoryId:ID(Category)", "name"],
+        "brands": ["brandId:ID(Brand)", "name", "country"],
+    }
+    RELATIONSHIPS = {
+        "placed": [":START_ID(Customer)", ":END_ID(Order)"],
+        "contains": [":START_ID(Order)", ":END_ID(Product)", "quantity:int", "unit_price:float"],
+        "belongs_to": [":START_ID(Product)", ":END_ID(Category)"],
+        "made_by": [":START_ID(Product)", ":END_ID(Brand)"],
+        "compatible_with": [":START_ID(Product)", ":END_ID(Product)", "via"],
+    }
+
+    def __init__(self, directory):
+        self.out = _CsvFiles(directory)
+        for name, header in {**self.NODES, **self.RELATIONSHIPS}.items():
+            self._header(name, header)
+        self.w = {name: self.out.open(name) for name in [*self.NODES, "products", *self.RELATIONSHIPS]}
+
+    def _header(self, name, header):
+        with open(self.out.dir / f"{name}_header.csv", "w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(header)
+
+    def catalog(self, cat):
+        categories = dict(cat.categories)
+        self.w["categories"].writerows(cat.categories)
+        self.w["brands"].writerows(cat.brands)
+
+        spec_values = {}
+        for p in cat.products:
+            for key, value in p.specs.items():
+                spec_values.setdefault(key, []).append(value)
+        spec_keys = list(spec_values)
+        self._header("products", ["productId:ID(Product)", "sku", "name", "price:float", "release_date:date", ":LABEL"]
+                     + [key + neo4j_type(spec_values[key]) for key in spec_keys])
+
+        boards_by_socket, boards_by_memory = {}, {}
+        for p in cat.products:
+            label = categories[p.category_id]
+            specs = [self._value(p.specs.get(key)) for key in spec_keys]
+            self.w["products"].writerow([p.id, p.sku, p.name, p.price / 100, p.release_date, f"Product;{label}", *specs])
+            self.w["belongs_to"].writerow((p.id, p.category_id))
+            self.w["made_by"].writerow((p.id, p.brand_id))
+            if label == "Motherboard":
+                boards_by_socket.setdefault(p.specs["socket"], []).append(p.id)
+                boards_by_memory.setdefault(p.specs["memory_type"], []).append(p.id)
+
+        compatible = self.w["compatible_with"]
+        for p in cat.products:
+            label = categories[p.category_id]
+            if label == "CPU":
+                compatible.writerows((p.id, b, "socket") for b in boards_by_socket.get(p.specs["socket"], ()))
+            elif label == "RAM":
+                compatible.writerows((p.id, b, "memory_type") for b in boards_by_memory.get(p.specs["memory_type"], ()))
+
+    @staticmethod
+    def _value(value):
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return value
+
+    def customer(self, customer, addresses):
+        self.w["customers"].writerow(customer)
+
+    def order(self, order, items, payment, shipment):
+        oid, customer_id, _, status, total, created = order
+        carrier, shipped, delivered = (shipment[2], shipment[4], shipment[5]) if shipment else (None, None, None)
+        self.w["orders"].writerow((oid, status, total / 100, created, payment[2], payment[3], payment[5],
+                                   carrier, shipped, delivered))
+        self.w["placed"].writerow((customer_id, oid))
+        self.w["contains"].writerows((oid, i[2], i[3], i[4] / 100) for i in items)
+
+    def close(self):
+        self.out.close()
