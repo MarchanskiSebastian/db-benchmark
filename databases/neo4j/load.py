@@ -45,7 +45,10 @@ def env():
 def connect():
     e = env()
     uri = f"bolt://{e.get('NEO4J_HOST', '127.0.0.1')}:{e.get('NEO4J_BOLT_PORT', 7687)}"
-    return GraphDatabase.driver(uri, auth=(e.get("NEO4J_USER", "neo4j"), e["NEO4J_PASSWORD"]))
+    # Optional properties (stock, tracking_number, ...) exist on some nodes only; the server's
+    # "property does not exist" notifications would flood the output.
+    return GraphDatabase.driver(uri, auth=(e.get("NEO4J_USER", "neo4j"), e["NEO4J_PASSWORD"]),
+                                notifications_min_severity="OFF")
 
 
 def wait_until_ready(driver, timeout=180):
