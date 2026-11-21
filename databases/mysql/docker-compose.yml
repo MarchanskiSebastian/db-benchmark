@@ -4,6 +4,12 @@ services:
     image: mysql:8
     container_name: bench-mysql
     env_file: ../../.env
+    command:
+      # Required by load.py (LOAD DATA LOCAL INFILE).
+      - --local-infile=1
+      # The default 128 MB pool would turn the benchmark into a disk test; ~half of the
+      # container memory matches what the other engines get for their caches.
+      - --innodb-buffer-pool-size=2G
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
@@ -14,10 +20,12 @@ services:
           cpus: "${DB_CPUS:-2}"
           memory: ${DB_MEMORY:-4g}
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
+      # TCP instead of the socket: the init-time temporary server listens on the socket only,
+      # so the container is reported healthy only once the real server accepts connections.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 30
 
 volumes:
   mysql_data:

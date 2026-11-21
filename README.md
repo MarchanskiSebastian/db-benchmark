@@ -78,7 +78,7 @@ Benchmark commands will be documented once the runner is implemented.
 | Branch                  | Area                                   | Status      |
 |-------------------------|----------------------------------------|-------------|
 | `feat/postgres-setup`   | PostgreSQL container and plan          | In review   |
-| `feat/mysql-setup`      | MySQL container and plan               | In review   |
+| `feat/mysql-setup`      | MySQL container, import, scenarios     | ✅ Done     |
 | `feat/mongodb-setup`    | MongoDB container and document model   | In review   |
 | `feat/neo4j-setup`      | Neo4j container and graph model        | In review   |
 | `feat/data-generator`   | 12-table schema and data generator     | ✅ Done     |
