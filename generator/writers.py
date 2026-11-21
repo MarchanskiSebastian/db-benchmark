@@ -1,6 +1,7 @@
 """Output writers. Each receives the same entities from generate() and writes one format."""
 
 import csv
+import json
 from pathlib import Path
 
 TABLES = {
@@ -82,3 +83,83 @@ class RelationalWriter:
 
     def close(self):
         self.out.close()
+
+
+def mongo_date(value):
+    return {"$date": f"{value}Z"} if value else None
+
+
+class MongoWriter:
+    """NDJSON in MongoDB Extended JSON (relaxed), loadable with mongoimport.
+
+    products embed specs and stock, customers embed addresses, and orders embed items,
+    payment and shipment, the read-optimised document model planned for MongoDB.
+    """
+
+    def __init__(self, directory):
+        self.dir = Path(directory)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.files = {
+            name: open(self.dir / f"{name}.ndjson", "w", encoding="utf-8", buffering=BUFFER)
+            for name in ("products", "customers", "orders")
+        }
+        self.encode = json.JSONEncoder(ensure_ascii=False, separators=(",", ":")).encode
+
+    def _write(self, collection, doc):
+        self.files[collection].write(self.encode(doc) + "\n")
+
+    def catalog(self, cat):
+        categories = dict(cat.categories)
+        brands = {i: name for i, name, _ in cat.brands}
+        suppliers = {s[0]: s[1] for s in cat.suppliers}
+        stock = {}
+        for product_id, supplier_id, warehouse, quantity, updated in cat.inventory:
+            stock.setdefault(product_id, []).append({
+                "supplier_id": supplier_id, "supplier": suppliers[supplier_id], "warehouse": warehouse,
+                "quantity": quantity, "updated_at": mongo_date(updated),
+            })
+        # Kept for embedding product name and category into order items.
+        self.products = {p.id: (p.name, categories[p.category_id]) for p in cat.products}
+        for p in cat.products:
+            self._write("products", {
+                "_id": p.id, "sku": p.sku, "name": p.name,
+                "category": {"id": p.category_id, "name": categories[p.category_id]},
+                "brand": {"id": p.brand_id, "name": brands[p.brand_id]},
+                "price": p.price / 100, "release_date": mongo_date(f"{p.release_date}T00:00:00"),
+                "specs": p.specs, "stock": stock[p.id],
+            })
+
+    def customer(self, customer, addresses):
+        cid, first, last, email, phone, created = customer
+        self._write("customers", {
+            "_id": cid, "first_name": first, "last_name": last, "email": email, "phone": phone,
+            "created_at": mongo_date(created),
+            "addresses": [
+                {"address_id": a[0], "street": a[2], "city": a[3], "postal_code": a[4],
+                 "country": a[5], "is_default": a[6]}
+                for a in addresses
+            ],
+        })
+
+    def order(self, order, items, payment, shipment):
+        oid, customer_id, address_id, status, total, created = order
+        doc = {
+            "_id": oid, "customer_id": customer_id, "address_id": address_id, "status": status,
+            "total_amount": total / 100, "created_at": mongo_date(created),
+            "items": [
+                {"item_id": i[0], "product_id": i[2], "name": self.products[i[2]][0],
+                 "category": self.products[i[2]][1], "quantity": i[3], "unit_price": i[4] / 100}
+                for i in items
+            ],
+            "payment": {"payment_id": payment[0], "method": payment[2], "status": payment[3],
+                        "amount": payment[4] / 100, "paid_at": mongo_date(payment[5])},
+            "shipment": None,
+        }
+        if shipment:
+            doc["shipment"] = {"shipment_id": shipment[0], "carrier": shipment[2], "tracking_number": shipment[3],
+                               "shipped_at": mongo_date(shipment[4]), "delivered_at": mongo_date(shipment[5])}
+        self._write("orders", doc)
+
+    def close(self):
+        for f in self.files.values():
+            f.close()

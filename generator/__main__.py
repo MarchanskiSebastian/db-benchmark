@@ -6,11 +6,11 @@ import time
 from pathlib import Path
 
 from .generate import SIZES, generate
-from .writers import RelationalWriter
+from .writers import MongoWriter, RelationalWriter
 
 
 def build_writers(out):
-    return [RelationalWriter(out / "relational")]
+    return [RelationalWriter(out / "relational"), MongoWriter(out / "mongo")]
 
 
 def main(argv=None):
