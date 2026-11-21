@@ -59,14 +59,18 @@ def _ascii(text):
 class Progress:
     def __init__(self, label, total, enabled):
         self.label, self.total, self.enabled = label, total, enabled
-        self.step = max(total // 100, 1)
+        # Redraw in place on a terminal; in logs print fewer, separate lines.
+        self.tty = sys.stderr.isatty()
+        self.step = max(total // (100 if self.tty else 10), 1)
         self.start = time.perf_counter()
 
     def update(self, done):
         if self.enabled and (done % self.step == 0 or done == self.total):
             elapsed = time.perf_counter() - self.start
-            print(f"\r  {self.label:<10} {done * 100 // self.total:3d}%  {done:>11,}/{self.total:,}  {elapsed:6.1f}s",
-                  end="\n" if done == self.total else "", file=sys.stderr, flush=True)
+            line = f"  {self.label:<10} {done * 100 // self.total:3d}%  {done:>11,}/{self.total:,}  {elapsed:6.1f}s"
+            last = done == self.total
+            print(("\r" if self.tty else "") + line, end="\n" if last or not self.tty else "",
+                  file=sys.stderr, flush=True)
 
 
 class Generator:
