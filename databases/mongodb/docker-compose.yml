@@ -1,0 +1,23 @@
+# Run from repo root: docker compose -f databases/mongodb/docker-compose.yml --env-file .env up -d
+services:
+  mongodb:
+    image: mongo:7
+    container_name: bench-mongodb
+    env_file: ../../.env
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPUS:-2}"
+          memory: ${DB_MEMORY:-4g}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb_data:
