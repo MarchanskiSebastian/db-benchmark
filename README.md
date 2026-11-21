@@ -80,7 +80,7 @@ Benchmark commands will be documented once the runner is implemented.
 | `feat/postgres-setup`   | PostgreSQL container and plan          | In review   |
 | `feat/mysql-setup`      | MySQL container and plan               | In review   |
 | `feat/mongodb-setup`    | MongoDB container and document model   | In review   |
-| `feat/neo4j-setup`      | Neo4j container and graph model        | In review   |
+| `feat/neo4j-setup`      | Neo4j container, import, scenarios     | ✅ Done     |
 | `feat/data-generator`   | 12-table schema and data generator     | ✅ Done     |
 | `feat/benchmark-runner` | 24 CRUD scenarios and runner           | In review   |
 | indexes                 | Index comparison before / after        | Planned     |
