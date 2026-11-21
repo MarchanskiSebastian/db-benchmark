@@ -1,0 +1,23 @@
+# Run from repo root: docker compose -f databases/postgres/docker-compose.yml --env-file .env up -d
+services:
+  postgres:
+    image: postgres:16
+    container_name: bench-postgres
+    env_file: ../../.env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPUS:-2}"
+          memory: ${DB_MEMORY:-4g}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
