@@ -29,7 +29,7 @@ and interface), so each engine stores them in its natural way:
 - CRUD performance tests (24 scenarios, 6 per operation, 3 runs each)
 - Index comparison (before / after)
 - `EXPLAIN` / query plan analysis
-- Scalability tests at 500k / 1M / 10M rows in the largest table
+- Scalability tests at 10k / 500k / 1M / 10M rows in the largest table (sizes S / M / L / XL)
 
 ## Tech stack
 
@@ -62,8 +62,16 @@ pip install -r requirements.txt
 docker compose -f databases/postgres/docker-compose.yml --env-file .env up -d
 ```
 
-Repeat the last command for `mysql`, `mongodb` and `neo4j`. Generator and benchmark
-commands will be documented once those parts are implemented.
+Repeat the last command for `mysql`, `mongodb` and `neo4j`.
+
+Generate a dataset (sizes `s`, `m`, `l`, `xl`, see [`generator/README.md`](generator/README.md)):
+
+```bash
+python -m generator --size s --out data/s --seed 42
+pytest generator/tests
+```
+
+Benchmark commands will be documented once the runner is implemented.
 
 ## Progress
 
@@ -73,8 +81,8 @@ commands will be documented once those parts are implemented.
 | `feat/mysql-setup`      | MySQL container and plan               | In review   |
 | `feat/mongodb-setup`    | MongoDB container and document model   | In review   |
 | `feat/neo4j-setup`      | Neo4j container and graph model        | In review   |
-| `feat/data-generator`   | 12-table schema and data generator     | In review   |
+| `feat/data-generator`   | 12-table schema and data generator     | ✅ Done     |
 | `feat/benchmark-runner` | 24 CRUD scenarios and runner           | In review   |
 | indexes                 | Index comparison before / after        | Planned     |
-| scalability             | 500k / 1M / 10M tests                  | Planned     |
+| scalability             | S / M / L / XL tests                   | Planned     |
 | report                  | Final report and charts                | Planned     |
